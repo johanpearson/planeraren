@@ -311,3 +311,12 @@ select.mini { min-height: 36px; padding: 4px 10px; margin-top: 6px; font-size: 1
   :root[data-theme='system'] .task.done { background: color-mix(in srgb, var(--bgd) 50%, var(--surface)); }
   :root[data-theme='system'] .task-ico { background: rgba(255, 255, 255, 0.1); }
 }
+
+/* ---------- installera ---------- */
+.install-card ul.tight { margin: 6px 0; padding-left: 18px; }
+.install-card ul.tight li { margin-bottom: 4px; }
+.install-card p { margin: 6px 0; }
+.install-banner { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1.5px solid var(--accent); border-radius: var(--r); padding: 8px 6px 8px 14px; margin: 0 0 12px; font-weight: 600; font-size: 14.5px; box-shadow: var(--shadow); }
+.install-banner span { flex: 1; }
+.btn.sm { min-height: 40px; padding: 0 16px; font-size: 14px; }
+.icon-x { width: 40px; height: 40px; border: 0; border-radius: 50%; background: none; color: var(--muted); font-size: 16px; flex: none; }
