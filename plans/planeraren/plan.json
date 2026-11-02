@@ -3095,7 +3095,7 @@
     {
       "id": "stack",
       "title": "Teknikval för appen",
-      "status": "proposed",
+      "status": "accepted",
       "context": "Ska vara en snabb, liten PWA som byggs statiskt till GitHub Pages och är lätt att underhålla.",
       "options": [
         {
@@ -3140,7 +3140,7 @@
     {
       "id": "update-strategy",
       "title": "Hur nya versioner aktiveras",
-      "status": "proposed",
+      "status": "accepted",
       "options": [
         {
           "name": "Automatiskt, laddar om vid säkert läge",
@@ -3179,7 +3179,7 @@
     {
       "id": "relative-time",
       "title": "Lagra tider relativt klar-tiden",
-      "status": "proposed",
+      "status": "accepted",
       "context": "Momenten sparar en förskjutning (\"2 dagar före kl 10\" eller \"3 h före\"), inte ett absolut datum.",
       "options": [
         {
@@ -3277,7 +3277,7 @@
     {
       "id": "row-colors",
       "title": "Hur kategorifärgen visas",
-      "status": "proposed",
+      "status": "accepted",
       "context": "Önskemål: hela raden i kategorins färg, inte bara en prick – och ett ljust, mjukt utseende.",
       "options": [
         {
@@ -3321,7 +3321,7 @@
     {
       "id": "light-default",
       "title": "Ljust läge som standard",
-      "status": "proposed",
+      "status": "accepted",
       "options": [
         {
           "name": "Ljust som standard, mörkt valbart",
@@ -3438,7 +3438,8 @@
         "BR-4-D",
         "category-delete",
         "category-delete-flow"
-      ]
+      ],
+      "answer": "Ja, precis så"
     },
     {
       "id": "Q-sets",
@@ -3453,7 +3454,8 @@
       "related": [
         "BR-4-A",
         "welcome"
-      ]
+      ],
+      "answer": "Förslagen räcker: Bakning & matlagning, Fest & evenemang, Flytt, Tomt"
     }
   ],
   "risks": [
