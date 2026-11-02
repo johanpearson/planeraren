@@ -39,7 +39,7 @@ Teknik: Vite, Preact, TypeScript, Dexie (IndexedDB) och vite-plugin-pwa (Workbox
 | Fil | Innehåll |
 |---|---|
 | `src/lib/time.ts` | Tider räknas baklänges från klar-tiden |
-| `src/lib/recipe.ts` | Hämtar recept (direkt → CORS-proxy → reservproxy) och läser schema.org/Recipe eller inklistrad text |
+| `src/lib/recipe.ts` | Hämtar recept via flera gratistjänster samtidigt och läser schema.org/Recipe, sidans text eller inklistrad text |
 | `src/lib/ingredients.ts` | Tolkar och skalar ingredienser |
 | `src/lib/ics.ts` | Kalenderexport |
 | `src/lib/update.ts` | Automatisk uppdatering |
@@ -54,4 +54,4 @@ Engångsinställning i repot: **Settings → Pages → Build and deployment → 
 ## Begränsningar
 
 - **Notiser när appen är stängd** kan inte garanteras utan en server. Använd därför kalenderexporten för viktiga påminnelser.
-- **Receptimport** går via publika gratisproxys (corsproxy.io, sedan allorigins.win), eftersom receptsajter blockerar direkta anrop från webbläsaren. Proxyn ser receptets adress. Om hämtningen misslyckas kan du klistra in texten istället.
+- **Receptimport** går via gratistjänster, eftersom receptsajter blockerar anrop direkt från webbläsaren. Appen frågar allorigins, codetabs och Jina Reader samtidigt och tar den första som ger ett recept. Strukturerad receptdata (schema.org) väljs i första hand, annars läses avsnitten "Ingredienser" och "Gör så här" ur sidans text. Tjänsterna ser receptets adress. Om ingen tjänst lyckas kan du klistra in texten istället. corsproxy.io används inte, eftersom dess gratisnivå bara gäller localhost.

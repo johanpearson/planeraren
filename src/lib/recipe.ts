@@ -2,7 +2,8 @@ import type { Category, Recipe } from './types';
 import { parseIngredient, parseYield } from './ingredients';
 import { uid } from './db';
 
-export type ParsedRecipe = Omit<Recipe, 'id' | 'createdAt' | 'updatedAt' | 'tags'>;
+/** structured = läst ur schema.org/Recipe (JSON-LD), annars tolkat ur text. */
+export type ParsedRecipe = Omit<Recipe, 'id' | 'createdAt' | 'updatedAt' | 'tags'> & { structured?: boolean };
 
 const decoder = () => (typeof document !== 'undefined' ? document.createElement('textarea') : null);
 function decode(s: string): string {
@@ -86,7 +87,8 @@ export function parseRecipeHtml(html: string, sourceUrl?: string): ParsedRecipe 
       servings: parseYield(r.recipeYield),
       ingredients,
       steps,
-      totalTime: r.totalTime || r.cookTime || null
+      totalTime: r.totalTime || r.cookTime || null,
+      structured: true
     };
   }
   return null;
@@ -94,31 +96,61 @@ export function parseRecipeHtml(html: string, sourceUrl?: string): ParsedRecipe 
 
 const ING_HEAD = /^(ingredienser|du behöver|ingredients)\b/i;
 const STEP_HEAD = /^(gör så här|instruktioner|tillagning|så här gör du|beskrivning|instructions|method)\b/i;
+/** Rubriker/rader som avslutar ett receptavsnitt på en hel webbsida. */
+const END_HEAD = /^(tips|näringsvärde|näring|relaterade|liknande|fler recept|kommentarer|betyg|recensioner|dela|spara|annons|du kanske också|populära|nutrition|related|reviews)\b/i;
 
-/** Tolkar inklistrad recepttext. */
-export function parseRecipeText(text: string): ParsedRecipe | null {
-  const lines = text.split(/\r?\n/).map((l) => l.replace(/^[\s•\-*–]+/, '').trim()).filter(Boolean);
+function cleanLine(l: string): string {
+  return l
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '') // markdown-bilder
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // markdown-länkar → text
+    .replace(/^#{1,6}\s*/, '')
+    .replace(/^[=]{3,}$/, '')
+    .replace(/[*_`]+/g, '')
+    .replace(/^[\s•\-*–]+/, '')
+    .replace(/^\[\s?[x ]?\s?\]\s*/i, '')
+    .trim();
+}
+
+/**
+ * Tolkar recepttext. `page` = hela webbsidans text (t.ex. från Jina Reader): då används bara
+ * avsnitten under "Ingredienser" och "Gör så här", så att menyer och annat brus ignoreras.
+ */
+export function parseRecipeText(text: string, sourceUrl?: string | null, page = false): ParsedRecipe | null {
+  let raw = text;
+  let pageTitle = '';
+  if (page) {
+    const t = /^Title:\s*(.+)$/m.exec(raw);
+    if (t) pageTitle = t[1].replace(/\s*[|–-]\s*(ICA|Köket|Arla|Coop|Tasteline|Mathem|Recept).*$/i, '').trim();
+    const mc = raw.indexOf('Markdown Content:');
+    if (mc >= 0) raw = raw.slice(mc + 'Markdown Content:'.length);
+  }
+  const lines = raw.split(/\r?\n/).map(cleanLine).filter(Boolean);
   if (!lines.length) return null;
   let title = '';
   let servings: ParsedRecipe['servings'] = null;
   const ingredients: string[] = [];
   const steps: string[] = [];
-  let mode: 'start' | 'ing' | 'step' = 'start';
+  let mode: 'start' | 'ing' | 'step' | 'skip' = page ? 'skip' : 'start';
   for (const line of lines) {
-    if (ING_HEAD.test(line)) {
+    if (ING_HEAD.test(line) && line.length < 40) {
       mode = 'ing';
       const y = parseYield(line.replace(ING_HEAD, ''));
       if (y && !servings) servings = y;
       continue;
     }
-    if (STEP_HEAD.test(line)) {
+    if (STEP_HEAD.test(line) && line.length < 40) {
       mode = 'step';
+      continue;
+    }
+    if (page && END_HEAD.test(line) && line.length < 40) {
+      mode = 'skip';
       continue;
     }
     if (!servings && /\b(\d+)\s*(portioner|port|bitar|st|personer)\b/i.test(line) && line.length < 40) {
       servings = parseYield(line);
-      if (mode === 'start') continue;
+      if (mode === 'start' || mode === 'skip') continue;
     }
+    if (mode === 'skip') continue;
     const numbered = /^\d+[.)]\s+/.test(line);
     const ing = parseIngredient(line);
     if (mode === 'start') {
@@ -129,13 +161,16 @@ export function parseRecipeText(text: string): ParsedRecipe | null {
       mode = ing.qty !== undefined && !numbered ? 'ing' : 'step';
     }
     if (mode === 'ing' && numbered) mode = 'step';
-    if (mode === 'ing') ingredients.push(line);
-    else steps.push(line.replace(/^\d+[.)]\s+/, ''));
+    if (mode === 'ing') {
+      if (page && line.length > 90) continue; // brödtext, inte en ingrediensrad
+      ingredients.push(line);
+    } else if (!page || line.length > 12) steps.push(line.replace(/^\d+[.)]\s+/, ''));
   }
+  if (page && (!ingredients.length || !steps.length)) return null;
   if (!ingredients.length && !steps.length) return null;
   return {
-    title: title || 'Inklistrat recept',
-    sourceUrl: null,
+    title: title || pageTitle || 'Inklistrat recept',
+    sourceUrl: sourceUrl || null,
     imageUrl: null,
     servings,
     ingredients: ingredients.map(parseIngredient),
@@ -144,22 +179,25 @@ export function parseRecipeText(text: string): ParsedRecipe | null {
   };
 }
 
-export const CORS_PROXIES = [
-  (u: string) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
-  (u: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`
-];
+/**
+ * Gratisvägar för att hämta en receptsida från en statisk sida (GitHub Pages saknar server, och
+ * receptsajter tillåter inte anrop från andra domäner). corsproxy.io används inte: dess gratisnivå
+ * gäller bara localhost, produktionsdomäner kräver betald nyckel.
+ */
+type Attempt = { name: string; url: (u: string) => string; read: (res: Response) => Promise<{ html?: string; text?: string }> };
 
-async function fetchText(url: string, ms = 10000): Promise<string> {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), ms);
-  try {
-    const res = await fetch(url, { signal: ctrl.signal });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.text();
-  } finally {
-    clearTimeout(t);
-  }
-}
+export const ATTEMPTS: Attempt[] = [
+  { name: 'direkt', url: (u) => u, read: async (r) => ({ html: await r.text() }) },
+  { name: 'allorigins', url: (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`, read: async (r) => ({ html: await r.text() }) },
+  {
+    name: 'allorigins-json',
+    url: (u) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+    read: async (r) => ({ html: ((await r.json()) as { contents?: string }).contents || '' })
+  },
+  { name: 'codetabs', url: (u) => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(u)}`, read: async (r) => ({ html: await r.text() }) },
+  // Jina Reader renderar sidan och returnerar läsbar text (markdown) – används när HTML-vägarna blockeras.
+  { name: 'jina', url: (u) => `https://r.jina.ai/${u}`, read: async (r) => ({ text: await r.text() }) }
+];
 
 export class ImportError extends Error {
   constructor(public kind: 'network' | 'norecipe', msg: string) {
@@ -167,23 +205,57 @@ export class ImportError extends Error {
   }
 }
 
-/** Hämtar en receptsida: direkt först (om sajten tillåter), sedan via CORS-proxy, sedan reservproxy. */
-export async function fetchRecipe(url: string): Promise<ParsedRecipe> {
-  const attempts = [(u: string) => u, ...CORS_PROXIES];
-  let gotHtml = false;
-  for (const make of attempts) {
-    let html: string;
-    try {
-      html = await fetchText(make(url));
-    } catch {
-      continue;
+async function tryAttempt(a: Attempt, url: string, ms: number): Promise<{ recipe: ParsedRecipe | null; got: boolean }> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const res = await fetch(a.url(url), { signal: ctrl.signal });
+    if (!res.ok) return { recipe: null, got: false };
+    const { html, text } = await a.read(res);
+    if (html) {
+      const r = parseRecipeHtml(html, url) || parseRecipeText(htmlToText(html), url, true);
+      return { recipe: r, got: html.length > 500 };
     }
-    gotHtml = true;
-    const r = parseRecipeHtml(html, url);
-    if (r) return r;
+    if (text) return { recipe: parseRecipeText(text, url, true), got: text.length > 200 };
+    return { recipe: null, got: false };
+  } catch {
+    return { recipe: null, got: false };
+  } finally {
+    clearTimeout(t);
   }
-  if (gotHtml) throw new ImportError('norecipe', 'Sidan saknar strukturerad receptdata.');
+}
+
+/** Hämtar en receptsida via alla vägar samtidigt och tar första som ger ett recept. Strukturerad data (JSON-LD) föredras. */
+export async function fetchRecipe(url: string, ms = 15000): Promise<ParsedRecipe> {
+  const results = ATTEMPTS.map((a) => tryAttempt(a, url, ms));
+  const first = await new Promise<ParsedRecipe | null>((resolve) => {
+    let left = results.length;
+    let textFallback: ParsedRecipe | null = null;
+    for (const p of results) {
+      p.then(({ recipe }) => {
+        if (recipe && recipe.structured) return resolve(recipe);
+        if (recipe && !textFallback) {
+          textFallback = recipe;
+          // Vänta en kort stund på strukturerad data från andra vägar, sedan räcker texten.
+          setTimeout(() => resolve(textFallback), 4000);
+        }
+        if (--left === 0) resolve(textFallback);
+      });
+    }
+  });
+  if (first) return first;
+  const any = (await Promise.all(results)).some((r) => r.got);
+  if (any) throw new ImportError('norecipe', 'Sidan saknar receptdata som går att läsa.');
   throw new ImportError('network', 'Kunde inte hämta sidan.');
+}
+
+/** Grov HTML → text för sidor utan JSON-LD (rubriker och listpunkter på egna rader). */
+export function htmlToText(html: string): string {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  doc.querySelectorAll('script,style,noscript,svg,nav,header,footer').forEach((e) => e.remove());
+  doc.querySelectorAll('br,p,div,li,h1,h2,h3,h4,h5,h6,tr,section,article').forEach((e) => e.append('\n'));
+  doc.querySelectorAll('li').forEach((e) => e.prepend('- '));
+  return (doc.body?.textContent || '').replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n');
 }
 
 export function extractUrl(...texts: (string | null | undefined)[]): string | null {
@@ -194,7 +266,7 @@ export function extractUrl(...texts: (string | null | undefined)[]): string | nu
   return null;
 }
 
-export function toRecipe(p: ParsedRecipe): Recipe {
+export function toRecipe({ structured: _s, ...p }: ParsedRecipe): Recipe {
   const now = Date.now();
   return { ...p, id: uid(), tags: [], createdAt: now, updatedAt: now };
 }
