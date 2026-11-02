@@ -6,6 +6,7 @@ import { enableNotifications } from '../lib/notify';
 import { shareOrDownload } from '../lib/ics';
 import { VERSION_LABEL } from '../lib/update';
 import { Empty, Header, catStyle } from '../components/common';
+import { InstallCard } from '../components/InstallCard';
 import type { ThemePref } from '../lib/types';
 
 export function SettingsView() {
@@ -51,6 +52,7 @@ export function SettingsView() {
     <>
       <Header title="Inställningar" />
       <main class="content">
+        <InstallCard />
         <section class="card">
           <h2 class="card-title">Dina kategorier</h2>
           {active.length === 0 && <p class="muted">Inga kategorier. Skapa en eller lägg till en startuppsättning.</p>}

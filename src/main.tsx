@@ -4,6 +4,7 @@ import { initUpdates, announceVersion } from './lib/update';
 import { initNotifications } from './lib/notify';
 import { extractUrl } from './lib/recipe';
 import { syncRoute } from './lib/ui';
+import { initInstall } from './lib/install';
 import './styles.css';
 
 // Delning från Android (Web Share Target): ./?title=…&text=…&url=…  →  #/import?url=…
@@ -15,6 +16,7 @@ if (q.has('url') || q.has('text') || q.has('title')) {
   syncRoute();
 }
 
+initInstall();
 render(<App />, document.getElementById('app')!);
 initUpdates();
 initNotifications();

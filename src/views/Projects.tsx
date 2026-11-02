@@ -5,6 +5,7 @@ import { go, openSheet, route } from '../lib/ui';
 import { deleteProject, setArchived } from '../lib/actions';
 import { Empty, Fab, Header } from '../components/common';
 import { SwipeRow } from '../components/SwipeRow';
+import { InstallBanner } from '../components/InstallCard';
 import type { Category, Project, Task } from '../lib/types';
 
 function ProjectCard({ p, tasks, cats }: { p: Project; tasks: Task[]; cats: Map<string, Category> }) {
@@ -63,6 +64,7 @@ export function ProjectsView() {
     <>
       <Header title={archive ? 'Arkiv' : 'Projekt'} sub={archive ? `${list.length} arkiverade` : `${list.length} pågående`} backTo={archive ? '' : undefined} />
       <main class="content">
+        {!archive && <InstallBanner />}
         {list.length === 0 && !archive && (
           <Empty icon="🗓️" text="Inga projekt ännu. Planera en tårta, en fest, en flytt – vad som helst med en deadline.">
             <button class="btn primary" onClick={() => openSheet('project-form')}>
