@@ -110,3 +110,68 @@ describe('fetchRecipe', () => {
     await expect(fetchRecipe(URL_, 500)).rejects.toMatchObject({ kind: 'network' });
   });
 });
+
+// Så som ICA:s sida faktiskt kom in via Jina Reader (2026-11-02): portionsrad, underrubriker och
+// knappar/notiser efter ingredienslistan.
+const ICA_PAGE = `Title: Chili con carne | Recept ICA.se
+
+Markdown Content:
+Chili con carne
+===============
+Ingredienser
+------------
+4 portioner
+*   2 gula lökar
+*   350 g nötfärs gärna ICAs nötfärs 12% eller hushållsfärs (ärt- och nötfärs)
+*   1 msk olja
+*   3/4 tsk salt
+*   2 förp vita bönor i tomatsås (à 440 g)
+Till servering
+*   salladskål
+*   hackad persilja
+Tillbehör
+*   jalapeñopeppar
+[Lägg till i inköpslista](https://www.ica.se/inkopslista/)
+Ha med dig inköpslistan överallt med ICA-appen
+[Läs mer om ICA-appen](https://www.ica.se/appar/)
+Klimatanpassa
+Receptet uppdaterat januari 2024.
+För alla
+Gör så här
+----------
+1.   Skala och hacka lökarna. Bryn färsen i oljan i en gryta.
+2.   Tillsätt bönorna och låt alltsammans bli varmt.`;
+
+describe('ICA-sida via Jina (skärmdump 2026-11-02)', () => {
+  it('tar inte med portionsraden eller knappar/notiser efter ingredienserna', () => {
+    const r = parseRecipeText(ICA_PAGE, 'https://www.ica.se/recept/chili-con-carne-424/', true)!;
+    expect(r.servings).toEqual({ amount: 4, unit: 'portioner' });
+    const raw = r.ingredients.map((i) => i.raw);
+    expect(raw).toEqual([
+      '2 gula lökar',
+      '350 g nötfärs gärna ICAs nötfärs 12% eller hushållsfärs (ärt- och nötfärs)',
+      '1 msk olja',
+      '3/4 tsk salt',
+      '2 förp vita bönor i tomatsås (à 440 g)',
+      'Till servering',
+      'salladskål',
+      'hackad persilja',
+      'Tillbehör',
+      'jalapeñopeppar'
+    ]);
+    expect(r.steps).toHaveLength(2);
+  });
+
+  it('skickar X-Return-Format: html till Jina för att få med JSON-LD', async () => {
+    const calls: { url: string; headers?: Record<string, string> }[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push({ url, headers: init?.headers as Record<string, string> });
+      if (url.startsWith('https://r.jina.ai/') && (init?.headers as Record<string, string> | undefined)?.['X-Return-Format'] === 'html') return new Response(LD);
+      throw new TypeError('Failed to fetch');
+    }));
+    const r = await fetchRecipe('https://www.ica.se/recept/chili-con-carne-424/', 500);
+    expect(r.structured).toBe(true);
+    expect(calls.filter((c) => c.url.startsWith('https://r.jina.ai/'))).toHaveLength(2);
+    vi.unstubAllGlobals();
+  });
+});

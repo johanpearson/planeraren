@@ -196,6 +196,12 @@ export function ImportView() {
     setState({ st: 'result', r: p });
   };
 
+  const removeLine = (field: 'ingredients' | 'steps', k: number) => {
+    if (state.st !== 'result') return;
+    const r = { ...state.r, [field]: (state.r[field] as unknown[]).filter((_, j) => j !== k) } as ParsedRecipe;
+    setState({ st: 'result', r });
+  };
+
   const save = async (plan: boolean) => {
     if (state.st !== 'result') return;
     const rec: Recipe = toRecipe(state.r);
@@ -254,21 +260,30 @@ export function ImportView() {
                 {state.r.servings ? ` · ${state.r.servings.amount} ${state.r.servings.unit}` : ''} · {state.r.ingredients.length} ingredienser · {state.r.steps.length} steg
               </div>
             </div>
+            {!state.r.structured && <p class="hint">Receptet lästes ur sidans text. Ta bort rader som inte hör till receptet med ✕.</p>}
             <section class="card ing">
               <h2 class="card-title">Ingredienser</h2>
-              {state.r.ingredients.map((i) => (
-                <div class="ing-row">
+              {state.r.ingredients.map((i, k) => (
+                <div class="ing-row editable">
                   <span>{i.raw}</span>
+                  <button class="row-x" aria-label={`Ta bort ${i.raw}`} onClick={() => removeLine('ingredients', k)}>
+                    ✕
+                  </button>
                 </div>
               ))}
             </section>
             <section class="card">
               <h2 class="card-title">Gör så här</h2>
-              <ol class="steps">
-                {state.r.steps.map((s) => (
-                  <li>{s}</li>
-                ))}
-              </ol>
+              {state.r.steps.map((st, k) => (
+                <div class="ing-row editable step-row">
+                  <span>
+                    <b>{k + 1}.</b> {st}
+                  </span>
+                  <button class="row-x" aria-label={`Ta bort steg ${k + 1}`} onClick={() => removeLine('steps', k)}>
+                    ✕
+                  </button>
+                </div>
+              ))}
             </section>
             <div class="btn-row">
               <button class="btn ghost" onClick={() => save(false)}>

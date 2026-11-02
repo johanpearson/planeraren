@@ -98,6 +98,10 @@ const ING_HEAD = /^(ingredienser|du behöver|ingredients)\b/i;
 const STEP_HEAD = /^(gör så här|instruktioner|tillagning|så här gör du|beskrivning|instructions|method)\b/i;
 /** Rubriker/rader som avslutar ett receptavsnitt på en hel webbsida. */
 const END_HEAD = /^(tips|näringsvärde|näring|relaterade|liknande|fler recept|kommentarer|betyg|recensioner|dela|spara|annons|du kanske också|populära|nutrition|related|reviews)\b/i;
+/** Knappar och notiser som receptsajter lägger efter ingredienslistan (ICA, Köket, Arla, Coop …). */
+const END_CTA = /^(lägg (till )?i (min )?inköpslista|lägg till alla|handla (ingredienserna|ingredienser|varorna)|köp ingredienserna|beställ (varorna|ingredienserna)|ha med dig inköpslistan|läs mer om|klimatanpassa|receptet (är )?uppdaterat|uppdaterad|skriv ut|betygsätt|ge betyg|spara recept|dela recept|för alla$|annons)/i;
+/** En rad som bara anger portioner, t.ex. "4 portioner" eller "12 bitar". */
+const SERVINGS_LINE = /^(ca\.?\s*)?\d+([-–]\d+)?\s*(portioner|port\.?|bitar|st|personer|pers\.?)$/i;
 
 function cleanLine(l: string): string {
   return l
@@ -142,8 +146,12 @@ export function parseRecipeText(text: string, sourceUrl?: string | null, page = 
       mode = 'step';
       continue;
     }
-    if (page && END_HEAD.test(line) && line.length < 40) {
+    if (page && ((END_HEAD.test(line) && line.length < 40) || (END_CTA.test(line) && line.length < 70))) {
       mode = 'skip';
+      continue;
+    }
+    if (SERVINGS_LINE.test(line)) {
+      if (!servings) servings = parseYield(line);
       continue;
     }
     if (!servings && /\b(\d+)\s*(portioner|port|bitar|st|personer)\b/i.test(line) && line.length < 40) {
@@ -184,7 +192,12 @@ export function parseRecipeText(text: string, sourceUrl?: string | null, page = 
  * receptsajter tillåter inte anrop från andra domäner). corsproxy.io används inte: dess gratisnivå
  * gäller bara localhost, produktionsdomäner kräver betald nyckel.
  */
-type Attempt = { name: string; url: (u: string) => string; read: (res: Response) => Promise<{ html?: string; text?: string }> };
+type Attempt = {
+  name: string;
+  url: (u: string) => string;
+  headers?: Record<string, string>;
+  read: (res: Response) => Promise<{ html?: string; text?: string }>;
+};
 
 export const ATTEMPTS: Attempt[] = [
   { name: 'direkt', url: (u) => u, read: async (r) => ({ html: await r.text() }) },
@@ -196,6 +209,9 @@ export const ATTEMPTS: Attempt[] = [
   },
   { name: 'codetabs', url: (u) => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(u)}`, read: async (r) => ({ html: await r.text() }) },
   // Jina Reader renderar sidan och returnerar läsbar text (markdown) – används när HTML-vägarna blockeras.
+  // Jina Reader renderar sidan i en riktig webbläsare. Som HTML följer receptdatan (JSON-LD) med om sajten har den …
+  { name: 'jina-html', url: (u) => `https://r.jina.ai/${u}`, headers: { 'X-Return-Format': 'html' }, read: async (r) => ({ html: await r.text() }) },
+  // … annars som läsbar text, där avsnitten Ingredienser / Gör så här plockas ut.
   { name: 'jina', url: (u) => `https://r.jina.ai/${u}`, read: async (r) => ({ text: await r.text() }) }
 ];
 
@@ -209,7 +225,7 @@ async function tryAttempt(a: Attempt, url: string, ms: number): Promise<{ recipe
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ms);
   try {
-    const res = await fetch(a.url(url), { signal: ctrl.signal });
+    const res = await fetch(a.url(url), { signal: ctrl.signal, headers: a.headers });
     if (!res.ok) return { recipe: null, got: false };
     const { html, text } = await a.read(res);
     if (html) {
