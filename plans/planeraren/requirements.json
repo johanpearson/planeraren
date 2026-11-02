@@ -1,0 +1,106 @@
+{
+  "source": "brief",
+  "note": "Utkast från Johans brief + svar på fyra följdfrågor (2026-11-02).",
+  "confirmed": true,
+  "brief": "> Jag vill ha en app där jag kan lägga in planering för exempelvis när jag ska laga mycket mat/baka avancerade tårtor etc. Jag vill kunna lägga in exempelvis \"tårta\" och kunna dela upp det i olika moment. Jag vill kunna ordna det utifrån när de olika tasksen behöver göras. Vill kunna bocka av det när det är färdigt.\n> Om jag kan lägga in recept i appen direkt, utan att behöva skriva av allting hade det varit super.\n> Vill att momenten ska ha olika färger så det blir visuellt tydligt.\n\n**Teknik:** PWA på GitHub Pages (publikt repo, allt gratis), installeras på Android, en enda användare, mobile first, modernt UX med swipes, notiser vid behov, uppdateras automatiskt vid ny version. Arbete på separat branch, merge till `main` när allt är godkänt.\n\n**Svar på följdfrågor:**\n- Tidsplan: *baklänges från klar-tid* (moment ligger t.ex. \"2 dagar före\" / \"3 h före\").\n- Färger: *färg per kategori* (t.ex. Förberedelse, Bakning, Kylning, Dekoration), redigerbara.\n- Recept: *dela länk från Chrome* till appen.\n- Notiser: *kalender-export + notiser i appen*.",
+  "requirements": [
+    {
+      "id": "BR-1", "title": "Projekt med klar-tid",
+      "statement": "Användaren ska kunna skapa ett projekt (t.ex. \"Prinsesstårta till Elsas kalas\") med namn och en tidpunkt då allt ska vara klart.",
+      "normative_strength": "must",
+      "verification_note": "Manuellt/e2e: skapa ett projekt med namn och klar-tid, stäng och öppna appen, projektet finns kvar i listan med rätt nedräkning.",
+      "acceptance_criteria": [
+        { "id": "BR-1-A", "given": "startsidan", "when": "jag skapar projektet \"Prinsesstårta\" med klar-tid lör 15:00", "then": "det visas i projektlistan med nedräkning till klar-tid och andel klara moment" },
+        { "id": "BR-1-B", "given": "ett projekt", "when": "jag ändrar klar-tiden", "then": "alla momentens beräknade tider flyttas lika mycket" },
+        { "id": "BR-1-C", "text": "Ett projekt kan arkiveras när det är klart och tas bort; borttagning går att ångra direkt." }
+      ]
+    },
+    {
+      "id": "BR-2", "title": "Dela upp i moment med tid baklänges",
+      "statement": "Ett projekt ska kunna delas upp i moment. Varje moment har namn, kategori, tid relativt klar-tiden (t.ex. 2 dagar före) och uppskattad längd, och momenten visas i tidsordning.",
+      "normative_strength": "must",
+      "verification_note": "Unit-test av tidsberäkningen (klar-tid minus förskjutning) + manuellt: lägg till moment i fel ordning och se att listan sorteras efter beräknad tid.",
+      "acceptance_criteria": [
+        { "id": "BR-2-A", "given": "projekt med klar-tid lör 15:00", "when": "jag lägger till \"Baka bottnar\" med \"2 dagar före kl 10:00\"", "then": "momentet visas torsdag 10:00 i tidslinjen" },
+        { "id": "BR-2-B", "text": "Momenten grupperas per dag och sorteras på beräknad starttid; moment kan ha anteckning och ingredienser." },
+        { "id": "BR-2-C", "text": "Ett moment kan flyttas genom att dra det eller ändra förskjutningen; tiden räknas om direkt." }
+      ]
+    },
+    {
+      "id": "BR-3", "title": "Bocka av moment",
+      "statement": "Användaren ska kunna bocka av ett moment när det är klart, snabbt med en swipe, och kunna ångra.",
+      "normative_strength": "must",
+      "verification_note": "e2e på mobil viewport: swipe höger på ett moment markerar det klart, Ångra i snackbar återställer det.",
+      "acceptance_criteria": [
+        { "id": "BR-3-A", "given": "ett ej klart moment", "when": "jag swipar höger (eller trycker på bocken)", "then": "momentet markeras klart, tonas ned och projektets förlopp ökar" },
+        { "id": "BR-3-B", "given": "jag nyss bockat av", "when": "jag trycker Ångra i snackbaren", "then": "momentet blir ej klart igen" },
+        { "id": "BR-3-C", "text": "Swipe vänster ger åtgärderna Redigera / Ta bort." }
+      ]
+    },
+    {
+      "id": "BR-4", "title": "Färg per kategori",
+      "statement": "Varje moment har en kategori med egen färg så att tidslinjen blir visuellt tydlig. Kategorierna och färgerna går att ändra.",
+      "normative_strength": "must",
+      "verification_note": "Manuellt: moment i olika kategorier har olika färgmarkering; byt färg på en kategori i inställningar och se alla dess moment ändras.",
+      "acceptance_criteria": [
+        { "id": "BR-4-A", "text": "Standardkategorier: Inköp, Förberedelse, Bakning, Kylning/vila, Fyllning & kräm, Montering & dekoration — var och en med distinkt färg." },
+        { "id": "BR-4-B", "given": "inställningar", "when": "jag byter färg eller namn på en kategori, eller lägger till en ny", "then": "alla moment i kategorin uppdateras" },
+        { "id": "BR-4-C", "text": "Kategorin syns även som text/ikon, inte bara färg (läsbart för färgblinda)." }
+      ]
+    },
+    {
+      "id": "BR-5", "title": "Importera recept via delad länk",
+      "statement": "Användaren ska kunna dela en receptsida från Chrome till appen och få receptets ingredienser och steg inlästa utan att skriva av dem, och sedan göra moment av stegen.",
+      "normative_strength": "should",
+      "verification_note": "Integrationstest mot sparade receptsidor (ICA, Köket.se, Arla) med schema.org/Recipe; manuellt: dela länk från Chrome på Android och se förhandsgranskning.",
+      "acceptance_criteria": [
+        { "id": "BR-5-A", "given": "appen är installerad", "when": "jag delar en receptlänk från Chrome och väljer Planeraren", "then": "appen öppnas på importvyn med länken ifylld och hämtar receptet" },
+        { "id": "BR-5-B", "given": "sidan har strukturerad receptdata", "when": "importen är klar", "then": "jag ser titel, ingredienser och steg och kan välja vilka steg som blir moment och i vilket projekt" },
+        { "id": "BR-5-C", "given": "hämtningen misslyckas eller sidan saknar receptdata", "when": "importen ger fel", "then": "jag får ett tydligt fel och kan klistra in recepttexten istället" }
+      ]
+    },
+    {
+      "id": "BR-6", "title": "Påminnelser",
+      "statement": "Användaren ska kunna få påminnelser om moment: tillförlitligt via export till telefonens kalender, och som notiser/timers när appen är igång.",
+      "normative_strength": "should",
+      "verification_note": "Manuellt på Android: exportera projekt till kalender och se händelser med alarm; starta en timer på ett moment och få notis när den löper ut.",
+      "acceptance_criteria": [
+        { "id": "BR-6-A", "given": "ett projekt", "when": "jag väljer Lägg i kalender", "then": "en .ics-fil skapas med ett event per ej klart moment med påminnelse, som Android-kalendern kan importera" },
+        { "id": "BR-6-B", "given": "notiser tillåtna och appen igång", "when": "ett moment ska starta eller en timer löper ut", "then": "jag får en systemnotis" },
+        { "id": "BR-6-C", "text": "Appen ber om notisbehörighet först när jag slår på påminnelser, inte vid start." }
+      ]
+    },
+    {
+      "id": "BR-7", "title": "Installerbar PWA, gratis på GitHub Pages",
+      "statement": "Appen ska vara en installerbar PWA som hostas gratis på GitHub Pages, fungerar offline och sparar all data lokalt på telefonen.",
+      "normative_strength": "must",
+      "verification_note": "Lighthouse PWA-audit i CI; manuellt: installera från Chrome på Android, slå på flygplansläge och använd appen.",
+      "acceptance_criteria": [
+        { "id": "BR-7-A", "text": "Appen kan installeras på Android-hemskärmen och öppnas i helskärm med egen ikon." },
+        { "id": "BR-7-B", "text": "Allt utom receptimport fungerar offline; data ligger i IndexedDB på enheten." },
+        { "id": "BR-7-C", "text": "Bygg och publicering sker via GitHub Actions till GitHub Pages utan kostnad och utan egen server." }
+      ]
+    },
+    {
+      "id": "BR-8", "title": "Automatisk uppdatering",
+      "statement": "När en ny version publiceras ska den installerade appen uppdatera sig automatiskt utan att data går förlorad.",
+      "normative_strength": "must",
+      "verification_note": "e2e: bygg version N, öppna, publicera N+1, öppna appen igen och verifiera ny versionssträng och oförändrad data.",
+      "acceptance_criteria": [
+        { "id": "BR-8-A", "given": "en ny version finns på GitHub Pages", "when": "jag öppnar appen", "then": "den nya versionen laddas ned i bakgrunden och aktiveras automatiskt, med en kort toast \"Uppdaterad till v1.3\"" },
+        { "id": "BR-8-B", "text": "Lokala data migreras och bevaras vid uppdatering." }
+      ]
+    },
+    {
+      "id": "BR-9", "title": "Mobile first med modernt UX",
+      "statement": "Appen ska vara designad för mobil i första hand, med gester (swipe), stora tryckytor och snabba övergångar.",
+      "normative_strength": "must",
+      "verification_note": "Manuellt på 360-412 px bredd: inga horisontella scroll, tryckytor minst 48 px, swipe-gester fungerar.",
+      "acceptance_criteria": [
+        { "id": "BR-9-A", "text": "Layouten fungerar från 360 px bredd utan horisontell scroll; tryckytor är minst 48 × 48 px." },
+        { "id": "BR-9-B", "text": "Gester: swipe för att bocka av / redigera moment, swipe mellan dagar i tidslinjen, dra för att ändra ordning." },
+        { "id": "BR-9-C", "text": "Följer telefonens mörka/ljusa läge." }
+      ]
+    }
+  ]
+}
