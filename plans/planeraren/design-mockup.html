@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Planeraren – designskiss</title>
+<style>
+:root{
+  --bg:#FBF7F2; --surface:#FFFFFF; --text:#2F2A35; --muted:#6E6673; --line:#EEE6DC;
+  --accent:#F4B9A7; --accent-strong:#E07E62; --shadow:0 6px 24px rgba(120,90,60,.10), 0 1px 3px rgba(120,90,60,.08);
+  --mint-bg:#DDF3E6; --mint:#3FA36F;
+  --citron-bg:#FFF2C2; --citron:#D9A80F;
+  --aprikos-bg:#FFE2CF; --aprikos:#EC8446;
+  --himmel-bg:#DCEBFB; --himmel:#4C8FD6;
+  --lavendel-bg:#ECE3FA; --lavendel:#9677D6;
+  --hallon-bg:#FBDDE4; --hallon:#DB5C78;
+  --mandel-bg:#F0E6D8; --mandel:#A6825C;
+  --r:18px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header.page{max-width:1200px;margin:0 auto;padding:28px 16px 8px}
+header.page h1{margin:0 0 6px;font-size:24px;font-weight:700;letter-spacing:-.01em}
+header.page p{margin:0;color:var(--muted);max-width:760px}
+.stage{max-width:1200px;margin:0 auto;padding:16px;display:flex;flex-wrap:wrap;gap:28px;justify-content:center}
+.phone{width:360px;max-width:100%;height:740px;background:var(--bg);border-radius:36px;box-shadow:0 20px 60px rgba(90,60,40,.18),0 0 0 10px #fff,0 0 0 11px #EDE3D8;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.cap{width:100%;text-align:center;color:var(--muted);font-size:13px;margin-top:14px}
+.col{display:flex;flex-direction:column;align-items:center}
+.status{height:28px;display:flex;justify-content:space-between;align-items:center;padding:0 22px;font-size:12px;color:var(--muted)}
+.top{padding:6px 20px 10px}
+.top h2{margin:0;font-size:22px;font-weight:700;letter-spacing:-.01em}
+.top .sub{color:var(--muted);font-size:13px}
+.scroll{flex:1;overflow-y:auto;padding:0 16px 96px}
+.tabbar{position:absolute;left:0;right:0;bottom:0;height:68px;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-top:1px solid var(--line);display:flex}
+.tabbar a{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;color:var(--muted);text-decoration:none}
+.tabbar a b{font-size:20px;font-weight:400;line-height:1}
+.tabbar a.on{color:var(--text);font-weight:600}
+.tabbar a.on b{background:var(--accent);border-radius:999px;padding:2px 16px}
+.fab{position:absolute;right:18px;bottom:84px;height:56px;padding:0 22px;border-radius:999px;border:0;background:var(--accent);color:var(--text);font-weight:700;font-size:15px;box-shadow:var(--shadow);cursor:pointer}
+/* project cards */
+.card{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);padding:16px;margin:0 0 12px}
+.card h3{margin:0 0 2px;font-size:16px}
+.card .when{color:var(--muted);font-size:13px}
+.bar{height:8px;background:#F3ECE4;border-radius:99px;margin:12px 0 8px;overflow:hidden;display:flex}
+.bar span{display:block;height:100%}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:12px;padding:3px 10px;border-radius:999px;background:#F5EFE8;color:var(--text)}
+.chip.warn{background:#FFE7C7;color:#7A4A0B}
+.emoji{font-size:22px;float:right}
+/* timeline */
+.days{display:flex;gap:8px;overflow-x:auto;padding:2px 16px 12px;scrollbar-width:none}
+.days button{flex:none;border:0;background:var(--surface);border-radius:999px;padding:8px 14px;font:inherit;font-size:13px;color:var(--muted);box-shadow:0 1px 3px rgba(120,90,60,.1);cursor:pointer;min-height:40px}
+.days button.on{background:var(--text);color:#fff}
+.progress-line{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);margin:0 0 12px}
+.progress-line .bar{flex:1;margin:0}
+.dayhead{font-size:13px;font-weight:600;color:var(--muted);margin:16px 4px 8px;display:flex;justify-content:space-between}
+.row-wrap{position:relative;margin:0 0 8px;border-radius:16px;overflow:hidden;touch-action:pan-y}
+.row-actions{position:absolute;inset:0;display:flex;justify-content:space-between;align-items:stretch;visibility:hidden}
+.row-wrap.active .row-actions{visibility:visible}
+.row-actions .done-hint{display:flex;align-items:center;padding-left:20px;font-weight:700;color:#1F5C3B;background:#CDEFD9;flex:1}
+.row-actions .right{display:flex}
+.row-actions .right button{border:0;font:inherit;font-weight:600;width:78px;cursor:pointer}
+.row-actions .edit{background:#E9E2F7;color:#4B3A78}
+.row-actions .del{background:#FAD4D9;color:#8A1F33}
+.task{position:relative;display:flex;gap:12px;align-items:center;padding:12px 14px 12px 16px;border-left:5px solid var(--edge);background:var(--bgc);min-height:64px;transition:transform .25s cubic-bezier(.2,.8,.2,1),opacity .2s;user-select:none;cursor:grab}
+.task.dragging{transition:none}
+.task .t{flex:1;min-width:0}
+.task .title{font-weight:600;font-size:15px}
+.task .meta{font-size:12.5px;color:#4E4752;margin-top:2px}
+.task .ico{width:36px;height:36px;border-radius:12px;background:rgba(255,255,255,.65);display:flex;align-items:center;justify-content:center;font-size:18px;flex:none}
+.task .check{width:32px;height:32px;border-radius:50%;border:2px solid var(--edge);background:rgba(255,255,255,.7);flex:none;display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;cursor:pointer}
+.task.done{background:color-mix(in srgb,var(--bgc) 45%,#fff)}
+.task.done .t,.task.done .ico{opacity:.55}
+.task.done .title{text-decoration:line-through}
+.task.done .check{background:var(--edge)}
+.task.next{box-shadow:inset 0 0 0 2px var(--edge)}
+.tag-next{font-size:11px;font-weight:700;background:#fff;border-radius:99px;padding:1px 8px;margin-left:6px;color:var(--text)}
+.c-mint{--bgc:var(--mint-bg);--edge:var(--mint)}
+.c-citron{--bgc:var(--citron-bg);--edge:var(--citron)}
+.c-aprikos{--bgc:var(--aprikos-bg);--edge:var(--aprikos)}
+.c-himmel{--bgc:var(--himmel-bg);--edge:var(--himmel)}
+.c-lavendel{--bgc:var(--lavendel-bg);--edge:var(--lavendel)}
+.c-hallon{--bgc:var(--hallon-bg);--edge:var(--hallon)}
+.c-mandel{--bgc:var(--mandel-bg);--edge:var(--mandel)}
+.snack{position:absolute;left:16px;right:16px;bottom:84px;background:var(--text);color:#fff;border-radius:14px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;font-size:14px;transform:translateY(140%);opacity:0;transition:.25s;z-index:5;pointer-events:none}
+.snack.show{transform:none;opacity:1;pointer-events:auto}
+.snack button{background:none;border:0;color:var(--accent);font:inherit;font-weight:700;cursor:pointer;min-height:40px;padding:0 6px}
+.hint{font-size:12px;color:var(--muted);text-align:center;margin:10px 0 0}
+/* recipe */
+.hero{height:150px;border-radius:var(--r);background:linear-gradient(135deg,#CFEBD9,#F7D9E3 60%,#FFE9C9);display:flex;align-items:flex-end;padding:14px;font-size:44px;margin-bottom:12px}
+.stepper{display:flex;align-items:center;justify-content:space-between;background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);padding:10px 12px;margin-bottom:12px}
+.stepper button{width:48px;height:48px;border-radius:50%;border:0;background:var(--accent);font-size:22px;font-weight:700;color:var(--text);cursor:pointer}
+.stepper .v{text-align:center}
+.stepper .v b{display:block;font-size:22px}
+.stepper .v span{font-size:12px;color:var(--muted)}
+.ing{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);padding:6px 14px;margin-bottom:12px}
+.ing div{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);gap:10px}
+.ing div:last-child{border-bottom:0}
+.ing .q{font-weight:700;white-space:nowrap}
+.ing .unk{color:var(--muted);font-style:italic}
+.btn{display:block;width:100%;height:52px;border-radius:999px;border:0;background:var(--accent);font:inherit;font-weight:700;color:var(--text);cursor:pointer;box-shadow:var(--shadow)}
+/* palette */
+.palette{max-width:1200px;margin:8px auto 40px;padding:0 16px}
+.palette h2{font-size:18px;margin:0 0 4px}
+.palette p{color:var(--muted);margin:0 0 12px}
+.sw{display:flex;flex-wrap:wrap;gap:10px}
+.sw .task{width:200px;min-height:52px;border-radius:14px;cursor:default}
+@media (max-width:420px){.phone{border-radius:0;box-shadow:none;height:720px}.stage{padding:0;gap:40px}}
+</style>
+</head>
+<body>
+<header class="page">
+  <h1>Planeraren – designskiss</h1>
+  <p>Ljust och mjukt: varm ljus bakgrund, vita kort, pastellfärger, rundade former. <b>Hela momentraden har kategorins färg</b> (pastell + kant i stark ton). Prova: <b>swipa höger</b> på ett moment för att bocka av (Ångra i snackbaren), <b>swipa vänster</b> för Redigera/Ta bort, tryck på dagarna, och ändra portioner i receptet.</p>
+</header>
+
+<div class="stage">
+  <!-- 1. Projekt -->
+  <div class="col">
+    <div class="phone">
+      <div class="status"><span>9:41</span><span>●●● 87 %</span></div>
+      <div class="top"><h2>Projekt</h2><div class="sub">4 pågående</div></div>
+      <div class="scroll">
+        <div class="card"><span class="emoji">🎂</span><h3>Prinsesstårta – Elsas kalas</h3><div class="when">Klar lör 7 nov 15:00 · om 4 dagar</div>
+          <div class="bar"><span style="width:14%;background:var(--mint)"></span><span style="width:12%;background:var(--citron)"></span><span style="width:10%;background:var(--aprikos)"></span></div>
+          <div class="chips"><span class="chip">5 av 14 klara</span><span class="chip">Nästa: vispa grädde fre 18:00</span></div></div>
+        <div class="card"><span class="emoji">📦</span><h3>Flytt till Södermalm</h3><div class="when">Klar lör 28 nov 12:00 · om 25 dagar</div>
+          <div class="bar"><span style="width:12%;background:var(--mandel)"></span><span style="width:7%;background:var(--himmel)"></span></div>
+          <div class="chips"><span class="chip">6 av 31 klara</span></div></div>
+        <div class="card"><span class="emoji">🎄</span><h3>Julbord 2026</h3><div class="when">Klar tor 24 dec 17:00 · om 52 dagar</div>
+          <div class="bar"></div><div class="chips"><span class="chip">0 av 22 klara</span></div></div>
+        <div class="card"><span class="emoji">🥐</span><h3>Kanelbullar till jobbfikat</h3><div class="when">Klar fre 6 nov 08:00</div>
+          <div class="bar"><span style="width:40%;background:var(--aprikos)"></span></div>
+          <div class="chips"><span class="chip">2 av 5 klara</span><span class="chip warn">1 försenat</span></div></div>
+      </div>
+      <button class="fab">＋ Nytt projekt</button>
+      <nav class="tabbar"><a class="on"><b>▦</b>Projekt</a><a><b>☀</b>Idag</a><a><b>📖</b>Recept</a><a><b>⚙</b>Inställningar</a></nav>
+    </div>
+    <div class="cap">Startsida – förloppsstapeln visar kategorifärgerna för klara moment</div>
+  </div>
+
+  <!-- 2. Tidslinje -->
+  <div class="col">
+    <div class="phone" id="tl">
+      <div class="status"><span>9:41</span><span>●●● 87 %</span></div>
+      <div class="top"><h2>Prinsesstårta</h2><div class="sub">Klar lör 7 nov 15:00 · om 4 d 6 h</div></div>
+      <div class="days" id="days"></div>
+      <div class="scroll">
+        <div class="progress-line"><div class="bar"><span id="pbar" style="background:var(--accent-strong)"></span></div><span id="ptext"></span></div>
+        <div id="list"></div>
+        <p class="hint">← swipa vänster · swipa höger →</p>
+      </div>
+      <div class="snack" id="snack"><span id="snacktext"></span><button id="undo">ÅNGRA</button></div>
+      <button class="fab">＋ Moment</button>
+      <nav class="tabbar"><a class="on"><b>▦</b>Projekt</a><a><b>☀</b>Idag</a><a><b>📖</b>Recept</a><a><b>⚙</b>Inställningar</a></nav>
+    </div>
+    <div class="cap">Tidslinje – hela raden i kategorins färg, swipe-gester</div>
+  </div>
+
+  <!-- 3. Recept -->
+  <div class="col">
+    <div class="phone">
+      <div class="status"><span>9:41</span><span>●●● 87 %</span></div>
+      <div class="top"><h2>Prinsesstårta</h2><div class="sub">ica.se · ca 3 h · i receptboken</div></div>
+      <div class="scroll">
+        <div class="hero">🎂</div>
+        <div class="stepper"><button id="minus" aria-label="Färre">−</button><div class="v"><b id="serv">12</b><span id="factor">bitar · original</span></div><button id="plus" aria-label="Fler">＋</button></div>
+        <div class="ing" id="ing"></div>
+        <button class="btn">Planera i projekt</button>
+      </div>
+      <nav class="tabbar"><a><b>▦</b>Projekt</a><a><b>☀</b>Idag</a><a class="on"><b>📖</b>Recept</a><a><b>⚙</b>Inställningar</a></nav>
+    </div>
+    <div class="cap">Receptbok – portioner skalar alla mängder</div>
+  </div>
+</div>
+
+<section class="palette">
+  <h2>Kategoripalett</h2>
+  <p>Kategorierna skapar du själv – här är färgerna du väljer bland. Varje färg har pastellbakgrund, kantfärg och mörk text som klarar WCAG AA.</p>
+  <div class="sw" id="sw"></div>
+</section>
+
+<script>
+const CATS={inkop:['Inköp','🛒','mint'],forb:['Förberedelse','🔪','citron'],bak:['Bakning','🔥','aprikos'],kyl:['Kylning/vila','❄️','himmel'],kram:['Fyllning & kräm','🥣','lavendel'],mont:['Montering & dekoration','🎂','hallon']};
+const tasks=[
+ {d:'Ons 4',dh:'Ons 4 nov · 3 dagar före',c:'inkop',t:'Handla mandelmassa, grädde, vanilj',m:'18:00 · 30 min',done:true},
+ {d:'Ons 4',dh:'Ons 4 nov · 3 dagar före',c:'forb',t:'Koka vaniljkräm',m:'20:00 · 30 min',done:true},
+ {d:'Tor 5',dh:'Tor 5 nov · 2 dagar före',c:'bak',t:'Baka sockerkaksbottnar',m:'10:00 · 1 h',done:true},
+ {d:'Tor 5',dh:'Tor 5 nov · 2 dagar före',c:'kyl',t:'Bottnarna svalnar',m:'11:00 · 2 h',done:true},
+ {d:'Tor 5',dh:'Tor 5 nov · 2 dagar före',c:'forb',t:'Färga och kavla ut marsipan',m:'19:00 · 45 min',done:true},
+ {d:'Fre 6',dh:'Fre 6 nov · dagen före',c:'kram',t:'Vispa grädde, vänd ner i krämen',m:'18:00 · 20 min'},
+ {d:'Fre 6',dh:'Fre 6 nov · dagen före',c:'mont',t:'Bygg tårtan: bottnar, sylt, kräm',m:'18:30 · 45 min'},
+ {d:'Fre 6',dh:'Fre 6 nov · dagen före',c:'kyl',t:'Tårtan vilar i kylen',m:'19:15 · över natten'},
+ {d:'Lör 7',dh:'Lör 7 nov · klar-dagen',c:'mont',t:'Lägg på marsipanlocket',m:'10:00 · 30 min'},
+ {d:'Lör 7',dh:'Lör 7 nov · klar-dagen',c:'mont',t:'Marsipanros + pudra florsocker',m:'10:30 · 20 min'},
+ {d:'Lör 7',dh:'Lör 7 nov · klar-dagen',c:'kyl',t:'Kyl till servering',m:'11:00 · 4 h'}
+];
+let day='Alla', undo=null, snackT=null;
+const $=s=>document.querySelector(s);
+function render(){
+  const days=['Alla',...new Set(tasks.map(t=>t.d))];
+  $('#days').innerHTML=days.map(d=>`<button class="${d===day?'on':''}" data-d="${d}">${d}</button>`).join('');
+  const nextIdx=tasks.findIndex(t=>!t.done);
+  let html='',last='';
+  tasks.forEach((t,i)=>{
+    if(t.hidden) return;
+    if(day!=='Alla'&&t.d!==day) return;
+    if(t.dh!==last){html+=`<div class="dayhead"><span>${t.dh}</span></div>`;last=t.dh;}
+    const [name,ico,col]=CATS[t.c];
+    html+=`<div class="row-wrap"><div class="row-actions"><div class="done-hint">✓ ${t.done?'Ej klar':'Klar'}</div><div class="right"><button class="edit">Redigera</button><button class="del" data-i="${i}">Ta bort</button></div></div>
+      <div class="task c-${col} ${t.done?'done':''} ${i===nextIdx?'next':''}" data-i="${i}">
+        <div class="ico">${ico}</div>
+        <div class="t"><div class="title">${t.t}${i===nextIdx?'<span class="tag-next">Nästa</span>':''}</div><div class="meta">${name} · ${t.m}</div></div>
+        <div class="check" data-c="${i}" role="checkbox" aria-checked="${!!t.done}">${t.done?'✓':''}</div>
+      </div></div>`;
+  });
+  $('#list').innerHTML=html;
+  const vis=tasks.filter(t=>!t.hidden), n=vis.filter(t=>t.done).length;
+  $('#pbar').style.width=(n/vis.length*100)+'%';
+  $('#ptext').textContent=`${n} av ${vis.length} klara`;
+}
+function snack(text,fn){
+  $('#snacktext').textContent=text; undo=fn; $('#snack').classList.add('show');
+  clearTimeout(snackT); snackT=setTimeout(()=>$('#snack').classList.remove('show'),6000);
+}
+function toggle(i){
+  const t=tasks[i]; t.done=!t.done; render();
+  snack(t.done?`✓ ”${t.t}” klar`:`”${t.t}” ej klar`,()=>{t.done=!t.done;render();});
+}
+$('#undo').onclick=()=>{undo&&undo();$('#snack').classList.remove('show');};
+$('#days').onclick=e=>{const b=e.target.closest('button');if(b){day=b.dataset.d;render();}};
+$('#list').addEventListener('click',e=>{
+  const c=e.target.closest('[data-c]'); if(c){toggle(+c.dataset.c);return;}
+  const d=e.target.closest('.del'); if(d){const t=tasks[+d.dataset.i];t.hidden=true;render();snack(`Momentet togs bort`,()=>{t.hidden=false;render();});}
+});
+// swipe
+let drag=null;
+$('#list').addEventListener('pointerdown',e=>{
+  const el=e.target.closest('.task'); if(!el||e.target.closest('[data-c]')) return;
+  el.parentElement.classList.add('active');
+  drag={el,x:e.clientX,y:e.clientY,dx:0,open:el.dataset.open==='1',moved:false};
+});
+window.addEventListener('pointermove',e=>{
+  if(!drag) return; const dx=e.clientX-drag.x, dy=e.clientY-drag.y;
+  if(!drag.moved&&Math.abs(dy)>Math.abs(dx)){drag=null;return;}
+  if(Math.abs(dx)>6){drag.moved=true;drag.el.classList.add('dragging');}
+  drag.dx=dx+(drag.open?-156:0);
+  drag.el.style.transform=`translateX(${Math.max(-170,Math.min(140,drag.dx))}px)`;
+});
+window.addEventListener('pointerup',()=>{
+  if(!drag) return; const {el,dx}=drag; el.classList.remove('dragging');
+  if(dx>90){el.style.transform='translateX(110%)';setTimeout(()=>toggle(+el.dataset.i),180);}
+  else if(dx<-70){el.style.transform='translateX(-156px)';el.dataset.open='1';}
+  else{el.style.transform='';el.dataset.open='';setTimeout(()=>el.parentElement.classList.remove('active'),260);}
+  drag=null;
+});
+render();
+
+// recipe scaling
+const base=12, ING=[[6,'','ägg'],[3,'dl','strösocker'],[1.5,'dl','vetemjöl'],[1.5,'dl','potatismjöl'],[2,'tsk','bakpulver'],[5,'dl','vispgrädde'],[0.5,'tsk','salt'],[400,'g','grön marsipan'],[null,'','Hallonsylt efter smak']];
+let serv=12;
+function fmt(q,u){
+  if(u==='dl'&&q>=10){q=q/10;u='l';}
+  if(u==='g'&&q>=1000){q=q/1000;u='kg';}
+  const r=Math.round(q*4)/4; let s=Number.isInteger(r)?String(r):r.toFixed(2).replace(/0$/,'');
+  return (s.replace('.',',')+(u?' '+u:''));
+}
+function renderIng(){
+  const f=serv/base;
+  $('#serv').textContent=serv;
+  $('#factor').textContent= f===1?'bitar · original':`bitar · ×${String(Math.round(f*100)/100).replace('.',',')}`;
+  $('#ing').innerHTML=ING.map(([q,u,n])=>q==null?`<div><span class="unk">${n}</span><span class="unk">oförändrad</span></div>`:`<div><span>${n}</span><span class="q">${fmt(q*f,u)}</span></div>`).join('');
+}
+$('#minus').onclick=()=>{serv=Math.max(2,serv-2);renderIng();};
+$('#plus').onclick=()=>{serv+=2;renderIng();};
+renderIng();
+
+// palette
+const PAL=[['Mint','mint','🛒'],['Citron','citron','🔪'],['Aprikos','aprikos','🔥'],['Himmel','himmel','❄️'],['Lavendel','lavendel','🥣'],['Hallon','hallon','🎂'],['Mandel','mandel','📦']];
+$('#sw').innerHTML=PAL.map(([n,c,i])=>`<div class="task c-${c}"><div class="ico">${i}</div><div class="t"><div class="title">${n}</div><div class="meta">Exempelkategori</div></div></div>`).join('');
+</script>
+</body>
+</html>
