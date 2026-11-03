@@ -103,6 +103,27 @@ const END_CTA = /^(lägg (till )?i (min )?inköpslista|lägg till alla|handla (i
 /** En rad som bara anger portioner, t.ex. "4 portioner" eller "12 bitar". */
 const SERVINGS_LINE = /^(ca\.?\s*)?\d+([-–]\d+)?\s*(portioner|port\.?|bitar|st|personer|pers\.?)$/i;
 
+/** Steg som börjar med numrering ("1.", "2)", "Steg 3:") eller punkt ("•", "-"). */
+const STEP_MARK = /^\s*(?:\d+[.):]\s+|steg\s+\d+\s*[.:)]?\s*|[•\-*–]\s+)/i;
+const SENTENCE_END = /[.!?:)"”»]$/;
+
+/**
+ * Slår ihop radbrytningar mitt i ett steg. Är stegen numrerade (eller punktade) börjar ett nytt steg
+ * bara vid en ny numrering eller tomrad; annars när föregående rad slutar en mening och nästa börjar med versal.
+ */
+export function mergeStepLines(lines: { text: string; mark: boolean; gap: boolean }[]): string[] {
+  const anyMark = lines.some((l) => l.mark);
+  const out: string[] = [];
+  for (const l of lines) {
+    const prev = out[out.length - 1];
+    const cont =
+      prev !== undefined && !l.mark && !l.gap && (anyMark || /^[a-zåäöé]/.test(l.text) || (!/^[A-ZÅÄÖÉ]/.test(l.text) && !SENTENCE_END.test(prev)));
+    if (cont) out[out.length - 1] = `${prev} ${l.text}`;
+    else out.push(l.text);
+  }
+  return out;
+}
+
 function cleanLine(l: string): string {
   return l
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '') // markdown-bilder
@@ -128,14 +149,25 @@ export function parseRecipeText(text: string, sourceUrl?: string | null, page = 
     const mc = raw.indexOf('Markdown Content:');
     if (mc >= 0) raw = raw.slice(mc + 'Markdown Content:'.length);
   }
-  const lines = raw.split(/\r?\n/).map(cleanLine).filter(Boolean);
+  const lines: { line: string; mark: boolean; gap: boolean }[] = [];
+  let gap = false;
+  for (const r of raw.split(/\r?\n/)) {
+    const line = cleanLine(r);
+    if (!line) {
+      gap = true;
+      continue;
+    }
+    lines.push({ line, mark: STEP_MARK.test(r.replace(/^[\s>]*(\*\*|__)?/, '')) || STEP_MARK.test(line), gap });
+    gap = false;
+  }
   if (!lines.length) return null;
   let title = '';
   let servings: ParsedRecipe['servings'] = null;
   const ingredients: string[] = [];
-  const steps: string[] = [];
+  const stepLines: { text: string; mark: boolean; gap: boolean }[] = [];
+  let markNext = false;
   let mode: 'start' | 'ing' | 'step' | 'skip' = page ? 'skip' : 'start';
-  for (const line of lines) {
+  for (const { line, mark, gap } of lines) {
     if (ING_HEAD.test(line) && line.length < 40) {
       mode = 'ing';
       const y = parseYield(line.replace(ING_HEAD, ''));
@@ -159,7 +191,7 @@ export function parseRecipeText(text: string, sourceUrl?: string | null, page = 
       if (mode === 'start' || mode === 'skip') continue;
     }
     if (mode === 'skip') continue;
-    const numbered = /^\d+[.)]\s+/.test(line);
+    const numbered = /^(\d+[.)]|steg\s+\d+)(\s|$)/i.test(line);
     const ing = parseIngredient(line);
     if (mode === 'start') {
       if (!title && ing.qty === undefined && !numbered && line.length < 80) {
@@ -169,11 +201,24 @@ export function parseRecipeText(text: string, sourceUrl?: string | null, page = 
       mode = ing.qty !== undefined && !numbered ? 'ing' : 'step';
     }
     if (mode === 'ing' && numbered) mode = 'step';
+    // Ingen mängd och en hel mening: instruktionerna har börjat utan rubrik.
+    if (mode === 'ing' && !page && ing.qty === undefined && (line.length > 45 || (/[.!]$/.test(line) && line.split(/\s+/).length >= 6))) mode = 'step';
     if (mode === 'ing') {
       if (page && line.length > 90) continue; // brödtext, inte en ingrediensrad
       ingredients.push(line);
-    } else if (!page || line.length > 12) steps.push(line.replace(/^\d+[.)]\s+/, ''));
+    } else {
+      const text = line.replace(/^(\d+[.):]|steg\s+\d+\s*[.:)]?)\s*/i, '').trim();
+      if (!text) {
+        markNext = true; // "Steg 1" på egen rad
+        continue;
+      }
+      if (page && text.length <= 12) continue;
+      stepLines.push({ text, mark: mark || markNext, gap });
+      markNext = false;
+    }
   }
+  // Hela webbsidor har redan ett steg per rad/listpunkt; inklistrad text kan ha radbrytningar mitt i steg.
+  const steps = page ? stepLines.map((l) => l.text) : mergeStepLines(stepLines);
   if (page && (!ingredients.length || !steps.length)) return null;
   if (!ingredients.length && !steps.length) return null;
   return {
@@ -307,8 +352,23 @@ export function guessCategory(step: string, cats: Category[], fallback: string):
   return fallback;
 }
 
+/** Förkortningar som slutar med punkt mitt i en mening. */
+const ABBR = /(?:^|[\s(])(?:ca|t\.ex|bl\.a|ev|resp|dvs|kl|nr|p\.g\.a|o\.dyl|osv)\.$/i;
+
+/** Första meningen i ett steg – delar inte vid förkortningar som "ca." eller "t.ex.". */
+export function firstSentence(step: string): string {
+  const re = /[.!?](?=\s+["”»(]?[A-ZÅÄÖÉ0-9])/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(step))) {
+    const head = step.slice(0, m.index + 1);
+    if (m[0] === '.' && ABBR.test(head)) continue;
+    return head;
+  }
+  return step;
+}
+
 /** Kort titel för ett moment av ett receptsteg. */
 export function stepTitle(step: string): string {
-  const first = step.split(/(?<=[.!])\s/)[0].replace(/[.!]$/, '');
+  const first = firstSentence(step).trim().replace(/[.!]$/, '');
   return first.length > 60 ? first.slice(0, 57).trimEnd() + '…' : first;
 }

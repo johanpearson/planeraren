@@ -6,6 +6,7 @@ import { formatDuration, isoDurationToMin } from '../lib/time';
 import { go, openSheet, route, toast } from '../lib/ui';
 import { deleteRecipe, saveRecipe } from '../lib/actions';
 import { Empty, Fab, Header } from '../components/common';
+import { StepEditor, cleanSteps } from '../components/StepEditor';
 import type { Recipe } from '../lib/types';
 
 function host(u?: string | null) {
@@ -145,7 +146,7 @@ export function RecipeView() {
             Ta bort
           </button>
           <button class="btn primary" onClick={() => openSheet('recipe-plan', { id: recipe.id, servings: cur })}>
-            Planera i projekt
+            Lägg till i projekt
           </button>
         </div>
       </main>
@@ -162,6 +163,9 @@ export function ImportView() {
   const [text, setText] = useState(r.query.get('text') || '');
   const [state, setState] = useState<ImportState>({ st: 'idle' });
   const [pasteMode, setPasteMode] = useState(r.query.get('mode') === 'paste');
+  const projectId = r.query.get('project');
+  const taskId = r.query.get('task') || undefined;
+  const intoProject = useLive(async () => (projectId ? (await db.projects.get(projectId)) ?? null : null), [projectId]);
 
   const run = async (u = url) => {
     const link = extractUrl(u) || u.trim();
@@ -196,7 +200,7 @@ export function ImportView() {
     setState({ st: 'result', r: p });
   };
 
-  const removeLine = (field: 'ingredients' | 'steps', k: number) => {
+  const removeLine = (field: 'ingredients', k: number) => {
     if (state.st !== 'result') return;
     const r = { ...state.r, [field]: (state.r[field] as unknown[]).filter((_, j) => j !== k) } as ParsedRecipe;
     setState({ st: 'result', r });
@@ -204,8 +208,13 @@ export function ImportView() {
 
   const save = async (plan: boolean) => {
     if (state.st !== 'result') return;
-    const rec: Recipe = toRecipe(state.r);
+    const rec: Recipe = toRecipe({ ...state.r, steps: cleanSteps(state.r.steps) });
     await saveRecipe(rec);
+    if (plan && intoProject) {
+      go(`p/${intoProject.id}`, true);
+      setTimeout(() => openSheet('recipe-plan', { id: rec.id, servings: rec.servings?.amount ?? 1, projectId: intoProject.id, taskId }), 50);
+      return;
+    }
     go(`r/${rec.id}`, true);
     if (plan) setTimeout(() => openSheet('recipe-plan', { id: rec.id, servings: rec.servings?.amount ?? 1 }), 50);
     else toast('📖 Sparat i receptboken');
@@ -213,7 +222,7 @@ export function ImportView() {
 
   return (
     <>
-      <Header title="Importera recept" backTo="recipes" />
+      <Header title="Importera recept" sub={intoProject ? `Till ${intoProject.name}` : undefined} backTo={intoProject ? `p/${intoProject.id}` : 'recipes'} />
       <main class="content">
         {state.st !== 'result' && (
           <>
@@ -260,7 +269,7 @@ export function ImportView() {
                 {state.r.servings ? ` · ${state.r.servings.amount} ${state.r.servings.unit}` : ''} · {state.r.ingredients.length} ingredienser · {state.r.steps.length} steg
               </div>
             </div>
-            {!state.r.structured && <p class="hint">Receptet lästes ur sidans text. Ta bort rader som inte hör till receptet med ✕.</p>}
+            {!state.r.structured && <p class="hint">Receptet lästes ur texten. Ta bort rader som inte hör till receptet med ✕ och rätta stegen om de delats konstigt.</p>}
             <section class="card ing">
               <h2 class="card-title">Ingredienser</h2>
               {state.r.ingredients.map((i, k) => (
@@ -274,23 +283,14 @@ export function ImportView() {
             </section>
             <section class="card">
               <h2 class="card-title">Gör så här</h2>
-              {state.r.steps.map((st, k) => (
-                <div class="ing-row editable step-row">
-                  <span>
-                    <b>{k + 1}.</b> {st}
-                  </span>
-                  <button class="row-x" aria-label={`Ta bort steg ${k + 1}`} onClick={() => removeLine('steps', k)}>
-                    ✕
-                  </button>
-                </div>
-              ))}
+              <StepEditor steps={state.r.steps} onChange={(steps) => setState({ st: 'result', r: { ...state.r, steps } })} />
             </section>
             <div class="btn-row">
               <button class="btn ghost" onClick={() => save(false)}>
                 Spara i receptboken
               </button>
               <button class="btn primary" onClick={() => save(true)}>
-                Spara och planera
+                {intoProject ? `Spara och lägg i ${intoProject.name}` : 'Spara och planera'}
               </button>
             </div>
             <button class="link-btn" onClick={() => setState({ st: 'idle' })}>

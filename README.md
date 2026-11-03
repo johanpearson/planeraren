@@ -11,7 +11,8 @@ En PWA för Android som körs gratis på GitHub Pages. All data ligger bara i te
 - **Tidslinje per dag** där hela raden har kategorins färg. Bläddra mellan dagar med flikarna eller genom att swipa.
 - **Gester** – swipa höger för att bocka av (med Ångra), swipa vänster för Redigera/Ta bort, håll inne och dra för att flytta ett moment till en annan dag.
 - **Egna kategorier** med färg och ikon. Startuppsättningar: Bakning & matlagning, Fest & evenemang, Flytt. Kategorier kan arkiveras med alla moment (och läggas in i ett nytt projekt senare) eller raderas.
-- **Receptbok** – dela en receptsida från Chrome till appen (eller klistra in text). Portionerna kan skalas, och stegen blir moment i ett projekt.
+- **Receptbok** – dela en receptsida från Chrome till appen (eller klistra in text). Stegen kan redigeras, delas och slås ihop, och portionerna kan skalas.
+- **Recept i projekt** – tryck **Lägg till recept** i ett projekt eller moment. Receptet blir antingen *ett moment* (t.ex. "Bottnar" i "Tårta") med stegen som delmoment att bocka av, eller *ett eget projekt* där varje steg blir ett moment.
 - **Påminnelser** – exportera ett projekt till telefonens kalender (.ics) för pålitliga påminnelser. Timers och notiser fungerar när appen är igång eller nyss har använts.
 - **Idag-vy** över alla projekt, **mallar** (nytt projekt från ett gammalt) och **säkerhetskopia** till fil.
 - **Offline** och **automatisk uppdatering** – en ny version laddas ned i bakgrunden och aktiveras när inget formulär är öppet.

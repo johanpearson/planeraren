@@ -184,12 +184,12 @@ export function ProjectView() {
           </>
         )}
         {visible.length === 0 && (
-          <Empty icon="🗓️" text="Dela upp projektet i moment – eller planera in ett recept så blir stegen moment.">
+          <Empty icon="🗓️" text="Dela upp projektet i moment – eller lägg till ett recept som ett moment med steg att bocka av.">
             <button class="btn primary" onClick={() => openSheet('task-form', { projectId: project.id })}>
               ＋ Moment
             </button>
-            <button class="btn ghost" onClick={() => go('recipes')}>
-              Från receptboken
+            <button class="btn ghost" onClick={() => openSheet('recipe-pick', { projectId: project.id })}>
+              📖 Lägg till recept
             </button>
           </Empty>
         )}
@@ -232,6 +232,11 @@ export function ProjectView() {
               ))}
             </section>
           ))
+        )}
+        {visible.length > 0 && !drag && (
+          <button class="btn ghost wide add-recipe" onClick={() => openSheet('recipe-pick', { projectId: project.id })}>
+            📖 Lägg till recept
+          </button>
         )}
         {visible.length > 0 && !drag && <p class="hint">Swipa höger = klar · vänster = redigera · håll inne för att flytta till annan dag</p>}
       </main>
