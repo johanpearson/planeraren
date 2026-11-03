@@ -91,7 +91,9 @@ export function TaskView() {
 
         {task.checklist.length > 0 && (
           <section class="card">
-            <h2 class="card-title">Checklista</h2>
+            <h2 class="card-title">
+              {recipe ? 'Steg' : 'Checklista'} · {task.checklist.filter((c) => c.checked).length}/{task.checklist.length}
+            </h2>
             {task.checklist.map((c, i) => (
               <label class="check-item">
                 <input type="checkbox" checked={!!c.checked} onChange={() => toggleItem(i)} />
@@ -113,6 +115,9 @@ export function TaskView() {
             📖 Öppna receptet: {recipe.title}
           </button>
         )}
+        <button class="link-btn" onClick={() => openSheet('recipe-pick', { projectId: project.id, taskId: task.id })}>
+          ＋ Lägg till {recipe ? 'ett till ' : ''}recept i momentet
+        </button>
 
         <section class="card timer">
           {left !== null ? (

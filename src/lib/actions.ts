@@ -157,18 +157,57 @@ export async function deleteRecipe(r: Recipe) {
   showSnack('Receptet togs bort', { label: 'Ångra', run: () => db.recipes.put(r) });
 }
 
+/** Ingredienslistan (skalad) som text för ett moments anteckning. */
+function ingredientNotes(recipe: Recipe, factor: number): string {
+  if (!recipe.ingredients.length) return '';
+  const amount = recipe.servings ? Math.round(recipe.servings.amount * factor * 100) / 100 : null;
+  const head = `Ingredienser – ${recipe.title}${amount && recipe.servings ? ` (${String(amount).replace('.', ',')} ${recipe.servings.unit})` : ''}:`;
+  return [head, ...recipe.ingredients.map((i) => `• ${scaleIngredient(i, factor).text}`)].join('\n');
+}
+
 /**
- * Gör valda receptsteg till moment. Förslagstider: stegen läggs i ordning med 1 h mellanrum
+ * Lägger ett recept som ETT moment: stegen blir delmoment (checklista) att bocka av och ingredienserna
+ * hamnar i anteckningen. Med `taskId` läggs stegen till i ett befintligt moment.
+ */
+export async function planRecipeAsTask(
+  recipe: Recipe,
+  projectId: string,
+  opts: { taskId?: string | null; title: string; categoryId: string; factor: number; steps: string[] }
+): Promise<string> {
+  const items = opts.steps.map((text) => ({ text, checked: false }));
+  const notes = ingredientNotes(recipe, opts.factor);
+  const existing = opts.taskId ? await db.tasks.get(opts.taskId) : undefined;
+  if (existing) {
+    await db.tasks.update(existing.id, {
+      checklist: [...existing.checklist, ...items],
+      notes: [existing.notes?.trim(), notes].filter(Boolean).join('\n\n'),
+      recipeId: existing.recipeId || recipe.id,
+      doneAt: null
+    });
+    return existing.id;
+  }
+  const t: Task = {
+    ...newTask(projectId, opts.categoryId, { kind: 'dayAt', days: 1, time: '10:00' }, opts.title),
+    checklist: items,
+    notes,
+    recipeId: recipe.id
+  };
+  await db.tasks.add(t);
+  return t.id;
+}
+
+/**
+ * Gör receptsteg till egna moment. Förslagstider: stegen läggs i ordning med 1 h mellanrum
  * och sista steget 1 h före klar-tiden – justeras sedan i tidslinjen.
  */
-export async function planRecipe(recipe: Recipe, projectId: string, steps: { index: number; categoryId: string }[], factor: number) {
+export async function planRecipe(recipe: Recipe, projectId: string, steps: { text: string; categoryId: string }[], factor: number) {
   const cats = await db.categories.toArray();
   const fallback = cats.find((c) => !c.archivedAt)?.id ?? '';
   const ingredients = recipe.ingredients.map((i) => scaleIngredient(i, factor).text);
   const n = steps.length;
   const now = Date.now();
   const tasks: Task[] = steps.map((s, k) => {
-    const text = recipe.steps[s.index];
+    const text = s.text;
     const mentioned = recipe.ingredients
       .map((ing, j) => ({ ing, j }))
       .filter(({ ing }) => ing.name && ing.name.length > 2 && text.toLowerCase().includes(ing.name.toLowerCase().split(/[ ,]/)[0]))

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { db, useLive } from '../lib/db';
 import { ICONS, PALETTE, PALETTE_KEYS } from '../lib/palette';
 import { describeOffset, fmtDateTime, formatDuration, parseDuration, parseLocal, taskStart, toLocalInput } from '../lib/time';
-import { closeSheet, go, openSheet, sheet, toast } from '../lib/ui';
+import { closeSheet, go, openSheet, route, sheet, toast } from '../lib/ui';
 import {
   archiveCategory,
   copyArchivedIntoProject,
@@ -12,15 +12,18 @@ import {
   deleteProject,
   newTask,
   planRecipe,
+  planRecipeAsTask,
   saveCategory,
   saveRecipe,
   saveTask,
   setArchived,
+  sortTasks,
   updateProject
 } from '../lib/actions';
 import { parseIngredient } from '../lib/ingredients';
 import { guessCategory } from '../lib/recipe';
 import { Field, Sheet, catStyle } from '../components/common';
+import { StepEditor, cleanSteps } from '../components/StepEditor';
 import type { Category, Offset, PaletteKey, Task } from '../lib/types';
 
 const EMOJIS = ['🎂', '🧁', '🍰', '🥐', '🍽️', '🎄', '🦞', '🎉', '📦', '🏡', '🌿', '✈️', '🎁', '⭐'];
@@ -41,7 +44,9 @@ export function SheetHost() {
     case 'category-delete':
       return <CategoryDelete id={p.id} />;
     case 'recipe-plan':
-      return <RecipePlan id={p.id} servings={p.servings} />;
+      return <RecipePlan id={p.id} servings={p.servings} projectId={p.projectId} taskId={p.taskId} />;
+    case 'recipe-pick':
+      return <RecipePick projectId={p.projectId} taskId={p.taskId} />;
     case 'recipe-form':
       return <RecipeForm id={p.id} />;
     case 'pick-project':
@@ -130,7 +135,7 @@ function ProjectMenu({ id, exportCal }: { id: string; exportCal: () => void }) {
       <div class="menu">
         <button onClick={() => { closeSheet(); exportCal(); }}>📅 Lägg i kalender</button>
         <button onClick={() => openSheet('project-form', { id })}>✎ Redigera projekt och klar-tid</button>
-        <button onClick={() => go('recipes')}>📖 Planera in ett recept</button>
+        <button onClick={() => openSheet('recipe-pick', { projectId: id })}>📖 Lägg till recept</button>
         <button onClick={() => { setArchived(id, !p.archivedAt); go(p.archivedAt ? `p/${id}` : '', true); }}>{p.archivedAt ? '↩ Återställ från arkiv' : '🗄️ Arkivera'}</button>
         <button class="danger-text" onClick={() => { go('', true); deleteProject(id); }}>🗑 Ta bort projekt</button>
       </div>
@@ -437,95 +442,264 @@ function PickProject({ categoryId }: { categoryId: string }) {
 
 /* ---------- recept ---------- */
 
-function RecipePlan({ id, servings }: { id: string; servings?: number }) {
+/** Recept in i ett projekt: som ETT moment (stegen blir delmoment att bocka av) eller som ett eget projekt (varje steg ett moment). */
+function RecipePlan({ id, servings, projectId, taskId }: { id: string; servings?: number; projectId?: string; taskId?: string }) {
   const recipe = useLive(() => db.recipes.get(id), [id]);
   const projects = useLive(() => db.projects.toArray());
   const cats = useLive(() => db.categories.orderBy('order').toArray());
-  const [pid, setPid] = useState('');
+  const [mode, setMode] = useState<'task' | 'project' | null>(null);
+  const [pid, setPid] = useState(projectId || '');
+  const [tid, setTid] = useState(taskId || '');
+  const tasks = useLive(() => (pid ? db.tasks.where('projectId').equals(pid).toArray() : ([] as Task[])), [pid]);
   const [serv, setServ] = useState<number>(servings || 0);
+  const [steps, setSteps] = useState<string[] | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState('');
+  const [catId, setCatId] = useState('');
+  const [pname, setPname] = useState('');
+  const [deadline, setDeadline] = useState(() => {
+    const d = new Date(Date.now() + 2 * 86400000);
+    d.setHours(15, 0, 0, 0);
+    return toLocalInput(d);
+  });
   const [sel, setSel] = useState<Record<number, string | false>>({});
+  const [busy, setBusy] = useState(false);
+
   useEffect(() => {
-    if (!recipe || !cats) return;
+    if (!recipe || !cats || steps) return;
+    const active = cats.filter((c) => !c.archivedAt);
+    setSteps(recipe.steps);
+    setTitle(recipe.title);
+    setPname(recipe.title);
+    setCatId(guessCategory(`${recipe.title} ${recipe.steps.join(' ')}`, active, active[0]?.id ?? ''));
+    if (!serv) setServ(recipe.servings?.amount || 1);
+  }, [recipe?.id, cats?.length]);
+
+  useEffect(() => {
+    if (!projects || mode) return;
+    const open = projects.filter((p) => !p.archivedAt).sort((a, b) => a.deadline.localeCompare(b.deadline));
+    if (!pid) setPid(open[0]?.id ?? '');
+    setMode(projectId || open.length ? 'task' : 'project');
+  }, [projects]);
+
+  useEffect(() => {
+    if (!steps || !cats) return;
     const active = cats.filter((c) => !c.archivedAt);
     const fb = active[0]?.id ?? '';
     const init: Record<number, string> = {};
-    recipe.steps.forEach((s, i) => (init[i] = guessCategory(s, active, fb)));
+    steps.forEach((s, i) => (init[i] = guessCategory(s, active, fb)));
     setSel(init);
-    if (!serv) setServ(recipe.servings?.amount || 1);
-  }, [recipe?.id, cats?.length]);
-  useEffect(() => {
-    if (projects && !pid) setPid(projects.filter((p) => !p.archivedAt).sort((a, b) => a.deadline.localeCompare(b.deadline))[0]?.id ?? 'new');
-  }, [projects]);
-  if (!recipe || !projects || !cats) return null;
+  }, [steps?.length, cats?.length]);
+
+  if (!recipe || !projects || !cats || !steps || !mode || !tasks) return null;
   const active = cats.filter((c) => !c.archivedAt);
-  const chosen = Object.entries(sel).filter(([, v]) => v !== false).map(([k, v]) => ({ index: +k, categoryId: v as string }));
+  const open = projects.filter((p) => !p.archivedAt || p.id === projectId).sort((a, b) => a.deadline.localeCompare(b.deadline));
+  const project = open.find((p) => p.id === pid);
+  const clean = cleanSteps(steps);
   const factor = serv / (recipe.servings?.amount || 1);
-  const run = async () => {
-    let target = pid;
-    if (target === 'new') {
-      const d = new Date(Date.now() + 2 * 86400000);
-      d.setHours(15, 0, 0, 0);
-      target = await createProject(recipe.title, toLocalInput(d), '🍽️');
-    }
-    const n = await planRecipe(recipe, target, chosen, factor);
-    go(`p/${target}`);
-    toast(`${n} moment från ${recipe.title} – justera tiderna i tidslinjen`);
+  const target = tasks.find((t) => t.id === tid);
+  const chosen = steps
+    .map((text, i) => ({ text: text.replace(/\s+/g, ' ').trim(), categoryId: sel[i] }))
+    .filter((s): s is { text: string; categoryId: string } => !!s.text && s.categoryId !== false && s.categoryId !== undefined);
+
+  const finish = (path: string, msg: string) => {
+    if (route.get().path.join('/') === path) closeSheet();
+    else go(path);
+    toast(msg);
   };
+
+  const run = async () => {
+    if (busy) return;
+    setBusy(true);
+    if (clean.join('\n') !== recipe.steps.join('\n')) await saveRecipe({ ...recipe, steps: clean });
+    if (mode === 'task') {
+      await planRecipeAsTask(recipe, pid, { taskId: tid || null, title: title.trim() || recipe.title, categoryId: catId, factor, steps: clean });
+      finish(`p/${pid}`, `"${target?.title || title.trim() || recipe.title}": ${clean.length} steg att bocka av – tryck på momentet`);
+    } else {
+      const p = await createProject(pname.trim() || recipe.title, deadline, '🍽️');
+      const n = await planRecipe(recipe, p, chosen, factor);
+      finish(`p/${p}`, `${n} moment från ${recipe.title} – justera tiderna i tidslinjen`);
+    }
+  };
+
+  const toggleEdit = () => {
+    if (editing) setSteps(cleanSteps(steps));
+    setEditing(!editing);
+  };
+
   return (
-    <Sheet title="Planera recept">
-      <Field label="Projekt">
-        <select value={pid} onChange={(e) => setPid((e.target as HTMLSelectElement).value)}>
-          {projects.filter((p) => !p.archivedAt).map((p) => (
-            <option value={p.id}>{p.name}</option>
-          ))}
-          <option value="new">＋ Nytt projekt ({recipe.title}, om 2 dagar)</option>
-        </select>
-      </Field>
-      <Field label={`Portioner (${recipe.servings?.unit ?? 'portioner'})`} hint="Mängderna i momentens checklistor skalas.">
-        <input type="number" inputMode="numeric" min={1} value={serv} onInput={(e) => setServ(parseFloat((e.target as HTMLInputElement).value) || 1)} />
-      </Field>
+    <Sheet title={projectId ? 'Lägg till recept' : 'Planera recept'}>
+      <p class="muted small">
+        <b>{recipe.title}</b> · {clean.length} steg
+      </p>
       <div class="field">
-        <span class="lbl">Steg som blir moment</span>
-        {recipe.steps.map((s, i) => {
-          const on = sel[i] !== false && sel[i] !== undefined;
-          const cat = active.find((c) => c.id === sel[i]);
-          return (
-            <div class={`plan-step ${on ? '' : 'off'}`} style={catStyle(cat)}>
-              <input type="checkbox" aria-label={`Ta med steg ${i + 1}`} checked={on} onChange={() => setSel({ ...sel, [i]: on ? false : active[0]?.id ?? '' })} />
-              <div class="grow">
-                <div class="small">{s}</div>
-                {on && (
-                  <select class="mini" value={sel[i] as string} onChange={(e) => setSel({ ...sel, [i]: (e.target as HTMLSelectElement).value })} aria-label="Kategori">
+        <span class="lbl">Receptet blir</span>
+        <div class="seg">
+          <button type="button" class={mode === 'task' ? 'on' : ''} aria-pressed={mode === 'task'} onClick={() => setMode('task')}>
+            Ett moment
+          </button>
+          <button type="button" class={mode === 'project' ? 'on' : ''} aria-pressed={mode === 'project'} onClick={() => setMode('project')}>
+            Ett eget projekt
+          </button>
+        </div>
+        <span class="hint">
+          {mode === 'task'
+            ? 'Ett moment i ett projekt – t.ex. "Bottnar" i "Tårta". Stegen blir delmoment som du bockar av inne i momentet.'
+            : 'Ett nytt projekt där varje steg blir ett eget moment i tidslinjen.'}
+        </span>
+      </div>
+      {mode === 'task' ? (
+        open.length === 0 ? (
+          <div class="alert info">Du har inga projekt än. Välj "Ett eget projekt", eller skapa ett projekt först.</div>
+        ) : (
+          <>
+            <Field label="Projekt">
+              <select
+                value={pid}
+                onChange={(e) => {
+                  setPid((e.target as HTMLSelectElement).value);
+                  setTid('');
+                }}
+              >
+                {open.map((p) => (
+                  <option value={p.id}>
+                    {p.emoji ? `${p.emoji} ` : ''}
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Moment" hint={tid ? 'Stegen läggs till sist i momentets delmoment.' : undefined}>
+              <select value={tid} onChange={(e) => setTid((e.target as HTMLSelectElement).value)}>
+                <option value="">＋ Nytt moment</option>
+                {project &&
+                  sortTasks(tasks, project.deadline).map(({ t }) => (
+                    <option value={t.id}>Lägg i "{t.title || 'Namnlöst moment'}"</option>
+                  ))}
+              </select>
+            </Field>
+            {!tid && (
+              <div class="row2">
+                <Field label="Momentets namn">
+                  <input value={title} onInput={(e) => setTitle((e.target as HTMLInputElement).value)} />
+                </Field>
+                <Field label="Kategori">
+                  <select value={catId} onChange={(e) => setCatId((e.target as HTMLSelectElement).value)}>
                     {active.map((c) => (
                       <option value={c.id}>
                         {c.icon} {c.name}
                       </option>
                     ))}
                   </select>
-                )}
+                </Field>
               </div>
-            </div>
-          );
-        })}
+            )}
+          </>
+        )
+      ) : (
+        <>
+          <Field label="Projektets namn">
+            <input value={pname} onInput={(e) => setPname((e.target as HTMLInputElement).value)} />
+          </Field>
+          <Field label="Ska vara klart" hint="Momenten planeras baklänges från den här tiden.">
+            <input type="datetime-local" value={deadline} onInput={(e) => setDeadline((e.target as HTMLInputElement).value)} />
+          </Field>
+        </>
+      )}
+      <Field label={`Portioner (${recipe.servings?.unit ?? 'portioner'})`} hint="Mängderna skalas.">
+        <input type="number" inputMode="numeric" min={1} value={serv} onInput={(e) => setServ(parseFloat((e.target as HTMLInputElement).value) || 1)} />
+      </Field>
+      <div class="field">
+        <span class="lbl">{mode === 'task' ? 'Delmoment (receptets steg)' : 'Steg som blir moment'}</span>
+        {editing ? (
+          <StepEditor steps={steps} onChange={setSteps} />
+        ) : mode === 'task' ? (
+          <ol class="steps-preview">
+            {clean.map((s) => (
+              <li>{s}</li>
+            ))}
+          </ol>
+        ) : (
+          steps.map((s, i) => {
+            const on = sel[i] !== false && sel[i] !== undefined;
+            const cat = active.find((c) => c.id === sel[i]);
+            return (
+              <div class={`plan-step ${on ? '' : 'off'}`} style={catStyle(cat)}>
+                <input type="checkbox" aria-label={`Ta med steg ${i + 1}`} checked={on} onChange={() => setSel({ ...sel, [i]: on ? false : active[0]?.id ?? '' })} />
+                <div class="grow">
+                  <div class="small">{s}</div>
+                  {on && (
+                    <select class="mini" value={sel[i] as string} onChange={(e) => setSel({ ...sel, [i]: (e.target as HTMLSelectElement).value })} aria-label="Kategori">
+                      {active.map((c) => (
+                        <option value={c.id}>
+                          {c.icon} {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
+        <button type="button" class="link-btn" onClick={toggleEdit}>
+          {editing ? '✓ Klar med stegen' : '✎ Redigera stegen'}
+        </button>
+        {editing && <span class="hint">Ändringarna sparas också i receptet.</span>}
       </div>
-      <p class="hint">Stegen läggs i ordning med en timme emellan, sista steget en timme före klar-tiden. Flytta dem sedan i tidslinjen.</p>
+      {mode === 'project' && <p class="hint">Stegen läggs i ordning med en timme emellan, sista steget en timme före klar-tiden. Flytta dem sedan i tidslinjen.</p>}
       <div class="btn-row">
         <button class="btn ghost" onClick={closeSheet}>
           Avbryt
         </button>
-        <button class="btn primary" disabled={!chosen.length} onClick={run}>
-          Skapa {chosen.length} moment
-        </button>
+        {mode === 'task' ? (
+          <button class="btn primary" disabled={busy || !pid || !clean.length} onClick={run}>
+            {tid ? `Lägg till ${clean.length} steg` : `Skapa moment med ${clean.length} steg`}
+          </button>
+        ) : (
+          <button class="btn primary" disabled={busy || !chosen.length || !deadline} onClick={run}>
+            Skapa projekt med {chosen.length} moment
+          </button>
+        )}
       </div>
+    </Sheet>
+  );
+}
+
+/** Väljer recept att lägga in i ett projekt (eller ett befintligt moment). */
+function RecipePick({ projectId, taskId }: { projectId: string; taskId?: string }) {
+  const recipes = useLive(() => db.recipes.toArray());
+  const [q, setQ] = useState('');
+  if (!recipes) return null;
+  const ql = q.trim().toLowerCase();
+  const list = recipes.filter((r) => !ql || r.title.toLowerCase().includes(ql)).sort((a, b) => b.updatedAt - a.updatedAt);
+  const importPath = `import?project=${encodeURIComponent(projectId)}${taskId ? `&task=${encodeURIComponent(taskId)}` : ''}`;
+  return (
+    <Sheet title={taskId ? 'Lägg till recept i momentet' : 'Lägg till recept'}>
+      <div class="menu">
+        <button onClick={() => go(importPath)}>🔗 Nytt recept från länk</button>
+        <button onClick={() => go(`${importPath}&mode=paste`)}>📝 Nytt recept – klistra in text</button>
+      </div>
+      {recipes.length > 0 && (
+        <>
+          <h3 class="lbl add-recipe">Från receptboken</h3>
+          {recipes.length > 6 && <input class="search" type="search" placeholder="Sök recept …" value={q} onInput={(e) => setQ((e.target as HTMLInputElement).value)} aria-label="Sök recept" />}
+          <div class="menu">
+            {list.map((r) => (
+              <button onClick={() => openSheet('recipe-plan', { id: r.id, projectId, taskId })}>📖 {r.title}</button>
+            ))}
+          </div>
+        </>
+      )}
     </Sheet>
   );
 }
 
 function RecipeForm({ id }: { id: string }) {
   const r = useLive(() => db.recipes.get(id), [id]);
-  const [f, setF] = useState<{ title: string; amount: string; unit: string; ing: string; steps: string } | null>(null);
+  const [f, setF] = useState<{ title: string; amount: string; unit: string; ing: string; steps: string[] } | null>(null);
   useEffect(() => {
-    if (r && !f) setF({ title: r.title, amount: String(r.servings?.amount ?? ''), unit: r.servings?.unit ?? 'portioner', ing: r.ingredients.map((i) => i.raw).join('\n'), steps: r.steps.join('\n') });
+    if (r && !f) setF({ title: r.title, amount: String(r.servings?.amount ?? ''), unit: r.servings?.unit ?? 'portioner', ing: r.ingredients.map((i) => i.raw).join('\n'), steps: r.steps });
   }, [r]);
   if (!r || !f) return null;
   const save = async (e: Event) => {
@@ -536,7 +710,7 @@ function RecipeForm({ id }: { id: string }) {
       title: f.title.trim() || r.title,
       servings: amount > 0 ? { amount, unit: f.unit.trim() || 'portioner' } : null,
       ingredients: f.ing.split('\n').map((x) => x.trim()).filter(Boolean).map(parseIngredient),
-      steps: f.steps.split('\n').map((x) => x.trim()).filter(Boolean)
+      steps: cleanSteps(f.steps)
     });
     closeSheet();
     toast('Receptet sparat');
@@ -558,9 +732,10 @@ function RecipeForm({ id }: { id: string }) {
         <Field label="Ingredienser (en per rad)">
           <textarea rows={7} value={f.ing} onInput={(e) => setF({ ...f, ing: (e.target as HTMLTextAreaElement).value })} />
         </Field>
-        <Field label="Steg (ett per rad)">
-          <textarea rows={7} value={f.steps} onInput={(e) => setF({ ...f, steps: (e.target as HTMLTextAreaElement).value })} />
-        </Field>
+        <div class="field">
+          <span class="lbl">Steg</span>
+          <StepEditor steps={f.steps} onChange={(steps) => setF({ ...f, steps })} />
+        </div>
         <div class="btn-row">
           <button type="button" class="btn ghost" onClick={closeSheet}>
             Avbryt
